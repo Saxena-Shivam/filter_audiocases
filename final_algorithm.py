@@ -9,6 +9,7 @@ from langchain_groq import ChatGroq
 from langchain.prompts import PromptTemplate
 import re
 import json
+EXCEL_PATH = "d:/Project-ARC/Question_Paper_Generator/audio/usecases.xlsx"  # <-- set your file path here
 
 # Load environment variables
 load_dotenv()
@@ -222,13 +223,13 @@ if uploaded_file:
 # Filtering section
 if uploaded_file and groq_api_key:
     st.markdown("## 🔍 Step 2: Filter Use Cases")
-    
+    must_not_have = []
     with st.container():
         st.markdown("### Inclusion Criteria")
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("**Must contain at least one of these:**")
+            st.markdown("#### 1️⃣ Must contain at least one of these:")
             prefer_have = st.multiselect(
                 "Preferred terms",
                 short_forms,
@@ -237,21 +238,24 @@ if uploaded_file and groq_api_key:
             )
             
         with col2:
-            must_not_have_option=[term for term in short_forms if term not in prefer_have]
             st.markdown("#### 2️⃣ Exclude Terms")
             must_not_have = st.multiselect(
                 "Select terms to exclude",
-                must_not_have_option,
+                short_forms,
                 help="Use cases containing ANY of these terms will be excluded",
                 key="must_not_have"
             )
-    
+        conflict_prefer_exclude = set(prefer_have) & set(must_not_have)
+        if conflict_prefer_exclude:
+            st.warning(f"⚠️ The following terms are selected in BOTH Preferred and Exclude: {', '.join(conflict_prefer_exclude)}. Please resolve the conflict.")
+            st.stop()
     # Advanced filtering
     with st.expander("⚙️ Advanced Filtering Options"):
         use_weights = st.checkbox("Enable weighted scoring", value=False)
         
         if use_weights:
-            key_term_options = [term for term in short_forms if term in prefer_have and term not in must_not_have]
+            # Only allow key_terms that are in prefer_have (and not in must_not_have)
+            key_term_options = [term for term in prefer_have if term not in must_not_have]
             key_terms = st.multiselect(
                 "Key terms for weighted scoring",
                 key_term_options,
@@ -371,7 +375,7 @@ if uploaded_file and groq_api_key:
                 col1.metric("Total Matched", len(results))
                 col2.metric("Most Common Difficulty", 
                         max(set([r[3] for r in results]), key=[r[3] for r in results].count))
-
+                st.markdown(f"### Showing {len(picked)} use cases below:")
                 for idx, (uc, freq, score, diff) in enumerate(picked):
                     highlighted_uc = uc
                     for term in prefer_have:
