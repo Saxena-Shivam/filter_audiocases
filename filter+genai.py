@@ -236,9 +236,10 @@ if uploaded_file and groq_api_key:
                 )
                 
                 st.markdown("#### 2️⃣ Exclude Terms")
+                must_not_have_option=[term for term in short_forms if term not in prefer_have]
                 must_not_have = st.multiselect(
                     "Select terms to exclude",
-                    short_forms,
+                    must_not_have_option,
                     help="Use cases containing ANY of these terms will be excluded",
                     key="must_not_have"
                 )
@@ -251,7 +252,7 @@ if uploaded_file and groq_api_key:
                     help="Assign weights to prioritize specific terms"
                 )
                 
-                key_term_options = [term for term in short_forms if term not in must_not_have]
+                key_term_options = [term for term in short_forms if term in prefer_have and term not in must_not_have]
                 if use_weights:
                     st.markdown("#### 3️⃣ Focus Terms")
                     key_terms = st.multiselect(

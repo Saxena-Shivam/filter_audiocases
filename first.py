@@ -55,7 +55,7 @@ st.markdown("""
             margin: 0 0 5px 0;
             color: #2c3e50;
         }
-        .difficulty-sanity {
+        .difficulty-easy {
             color: #27ae60;
             font-weight: bold;
             background-color: #e8f5e9;
@@ -63,7 +63,7 @@ st.markdown("""
             border-radius: 12px;
             display: inline-block;
         }
-        .difficulty-l2 {
+        .difficulty-medium {
             color: #f39c12;
             font-weight: bold;
             background-color: #fff3e0;
@@ -71,7 +71,7 @@ st.markdown("""
             border-radius: 12px;
             display: inline-block;
         }
-        .difficulty-l4 {
+        .difficulty-hard {
             color: #e74c3c;
             font-weight: bold;
             background-color: #ffebee;
@@ -238,9 +238,10 @@ if uploaded_file and groq_api_key:
             
         with col2:
             st.markdown("**Must NOT contain any of these:**")
+            must_not_have_option=[term for term in short_forms if term not in prefer_have]
             must_not_have = st.multiselect(
                 "Forbidden terms",
-                short_forms,
+                must_not_have_option,
                 help="Use cases containing ANY of these will be excluded",
                 key="must_not_have"
             )
@@ -250,7 +251,7 @@ if uploaded_file and groq_api_key:
         use_weights = st.checkbox("Enable weighted scoring", value=False)
         
         if use_weights:
-            key_term_options = [term for term in short_forms if term not in must_not_have]
+            key_term_options = [term for term in short_forms if term in prefer_have and term not in must_not_have]
             key_terms = st.multiselect(
                 "Key terms for weighted scoring",
                 key_term_options,
@@ -262,14 +263,14 @@ if uploaded_file and groq_api_key:
             top_k = st.number_input(
                 "Number of results to show",
                 min_value=1,
-                max_value=500,
-                value=50,
+                max_value=50,
+                value=10,
                 step=1
             )
         with col2:
             difficulty_select = st.selectbox(
                 "Filter by difficulty",
-                ["Any", "sanity", "L2", "L4"]
+                ["Any", "Easy", "Medium", "Hard"]
             )
     
     # Search button with better styling
@@ -300,11 +301,11 @@ if uploaded_file and groq_api_key:
 
             def classify_difficulty(score):
                 if score < 1:
-                    return "sanity"
+                    return "Easy"
                 elif score < 4:
-                    return "L2"
+                    return "Medium"
                 else:
-                    return "L4"
+                    return "Hard"
 
             # Apply filters
             filtered = [uc for uc in use_cases if contains_any(prefer_have, uc)]
@@ -328,33 +329,7 @@ if uploaded_file and groq_api_key:
                 results.append((uc, freq, score, diff))
                 
             results.sort(key=lambda x: (-x[1], -x[2]))
-            # ------------- Diverse Picking: Maximize Preferred Term Coverage -------------
-            picked = []
-            picked_set = set()
-            term_idx = 0
-            results_copy = results.copy()
-
-            while len(picked) < top_k and results_copy:
-                term = prefer_have[term_idx % len(prefer_have)]
-                # Find the first result not yet picked that contains this term
-                for i, (uc, freq, score, diff) in enumerate(results_copy):
-                    if uc not in picked_set and term.lower() in uc.lower():
-                        picked.append((uc, freq, score, diff))
-                        picked_set.add(uc)
-                        results_copy.pop(i)
-                        break
-                else:
-                    # If no more use cases for this term, move to next term
-                    pass
-                term_idx += 1
-
-            # If not enough picked, fill up with remaining highest scoring
-            if len(picked) < top_k:
-                for uc, freq, score, diff in results_copy:
-                    if uc not in picked_set:
-                        picked.append((uc, freq, score, diff))
-                    if len(picked) >= top_k:
-                        break
+            
             # Apply difficulty filter
             if difficulty_select != "Any":
                 results = [r for r in results if r[3] == difficulty_select]
@@ -366,16 +341,21 @@ if uploaded_file and groq_api_key:
                 st.info("No use cases match all your criteria")
             else:
                 # Summary stats
-                col1, col2 = st.columns(2)
+                col1, col2, col3 = st.columns(3)
                 col1.metric("Total Matched", len(results))
-                col2.metric("Most Common Difficulty", 
-                        max(set([r[3] for r in results]), key=[r[3] for r in results].count))
-
-                for idx, (uc, freq, score, diff) in enumerate(picked):
+                col2.metric("Average Score", f"{np.mean([r[2] for r in results]):.1f}")
+                col3.metric("Most Common Difficulty", 
+                           max(set([r[3] for r in results]), key=[r[3] for r in results].count))
+                
+                # Show results
+                for idx, (uc, freq, score, diff) in enumerate(results[:top_k]):
+                    # Highlight matching terms
                     highlighted_uc = uc
                     for term in prefer_have:
                         if term.lower() in uc.lower():
                             highlighted_uc = highlighted_uc.replace(term, f'<span class="matched-term">{term}</span>')
+                    
+                    # Display each result
                     with st.container():
                         st.markdown(f"""
                         <div class="result-item">
@@ -387,9 +367,9 @@ if uploaded_file and groq_api_key:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
-
-                # Download option (use picked instead of results[:top_k])
-                results_df = pd.DataFrame(picked, columns=["Use Case", "Matched Terms", "Score", "Difficulty"])
+                        
+                # Download option
+                results_df = pd.DataFrame(results[:top_k], columns=["Use Case", "Matched Terms", "Score", "Difficulty"])
                 st.download_button(
                     label="📥 Download Results",
                     data=results_df.to_csv(index=False),
