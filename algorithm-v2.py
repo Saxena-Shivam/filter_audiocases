@@ -2,12 +2,8 @@ import os
 import streamlit as st
 import pandas as pd
 import numpy as np
-import faiss
 import random
 from dotenv import load_dotenv
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_groq import ChatGroq
-from langchain.prompts import PromptTemplate
 import re
 import json
 EXCEL_PATH = "d:/Project-ARC/Question_Paper_Generator/audio/usecases.xlsx"  # <-- set your file path here
@@ -174,14 +170,6 @@ score_dict = {
 
 # API keys section in sidebar
 with st.sidebar:
-    st.header("🔑 API Configuration")
-    groq_api_key = st.text_input(
-        "Groq API Key",
-        type="password",
-        value=os.getenv("GROQ_API_KEY", ""),
-        help="Required for advanced features"
-    )
-    st.markdown("---")
     st.header("ℹ️ About")
     st.markdown("""
     This tool helps you filter and analyze audio testing use cases based on:
@@ -222,7 +210,7 @@ if uploaded_file:
         st.stop()
 
 # Filtering section
-if uploaded_file and groq_api_key:
+if uploaded_file:
     st.markdown("## 🔍 Step 2: Filter Use Cases")
     must_not_have = []
     with st.container():
@@ -260,13 +248,13 @@ if uploaded_file and groq_api_key:
                 key_term_options,
                 help="These terms will contribute to the difficulty score"
             )
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            num_sanity = st.number_input("Number of 'sanity' use cases", min_value=0, max_value=500, value=0, step=1)
-        with col2:
-            num_l2 = st.number_input("Number of 'L2' use cases", min_value=0, max_value=500, value=0, step=1)
-        with col3:
-            num_l4 = st.number_input("Number of 'L4' use cases", min_value=0, max_value=500, value=0, step=1)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        num_sanity = st.number_input("Number of 'sanity' use cases", min_value=0, max_value=500, value=0, step=1)
+    with col2:
+        num_l2 = st.number_input("Number of 'L2' use cases", min_value=0, max_value=500, value=0, step=1)
+    with col3:
+        num_l4 = st.number_input("Number of 'L4' use cases", min_value=0, max_value=500, value=0, step=1)
 
     if st.button("🔎 Search Use Cases", type="primary", use_container_width=True):
         if not prefer_have:
@@ -387,8 +375,20 @@ if uploaded_file and groq_api_key:
                     file_name="filtered_use_cases.csv",
                     mime="text/csv"
                 )
+                 # Download option for ALL filtered results (before difficulty picking)
+                all_filtered_results = []
+                for uc in filtered:
+                    freq = sum(1 for term in prefer_have if term.lower() in uc.lower())
+                    score = get_score(uc)
+                    diff = classify_difficulty(score)
+                    all_filtered_results.append((uc, freq, score, diff))
+                all_filtered_df = pd.DataFrame(all_filtered_results, columns=["Use Case", "Matched Terms", "Score", "Difficulty"])
+                st.download_button(
+                    label="📥 Download ALL Filtered Use Cases",
+                    data=all_filtered_df.to_csv(index=False),
+                    file_name="all_filtered_use_cases.csv",
+                    mime="text/csv"
+                )
 else:
     if not uploaded_file:
         st.info("Please upload an Excel file to begin")
-    if not groq_api_key:
-        st.info("Please enter your Groq API key in the sidebar")

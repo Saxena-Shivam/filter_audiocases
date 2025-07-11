@@ -137,14 +137,6 @@ score_dict = {
 
 # API keys section in sidebar
 with st.sidebar:
-    st.header("🔑 API Configuration")
-    groq_api_key = st.text_input(
-        "Groq API Key",
-        type="password",
-        value=os.getenv("GROQ_API_KEY", ""),
-        help="Required for advanced features"
-    )
-    st.markdown("---")
     st.header("ℹ️ About")
     st.markdown("""
     This tool helps you filter and analyze audio testing use cases based on:
@@ -180,7 +172,7 @@ if uploaded_file:
         st.error(f"Error reading file: {str(e)}")
         st.stop()
 
-if uploaded_file and groq_api_key:
+if uploaded_file:
     st.markdown("## 🔍 Step 2: Filter Use Cases")
     must_not_have = []
     with st.container():
@@ -302,6 +294,8 @@ if uploaded_file and groq_api_key:
                 st.warning("No use cases match your criteria and difficulty selection")
                 st.stop()
 
+            # ...existing code...
+
             # --- Frequency grouping and percentage picking as before ---
             freq_groups = {}
             for item in results:
@@ -357,15 +351,13 @@ if uploaded_file and groq_api_key:
                 if remaining:
                     picked.extend(random.sample(remaining, min(needed, len(remaining))))
 
-            # Sort picked by frequency and score for display
-            # picked.sort(key=lambda x: (-x[1], -x[2]))
+            # Shuffle picked for random display order
+            random.shuffle(picked)
+
             st.markdown(f"## 📊 Results ({len(filtered)} matched)")
             if not picked:
                 st.info("No use cases match all your criteria")
             else:
-                # col1, col2 = st.columns(2)
-                # col1.metric("Total Matched", len(filtered))
-                # col2.metric("Frequencies", ", ".join(f"{f}: {picks_per_group[f]}" for f in sorted_freqs))
                 st.markdown(f"### Showing {len(picked)} use cases below:")
                 for idx, (uc, freq, score, diff) in enumerate(picked):
                     highlighted_uc = uc
@@ -384,7 +376,7 @@ if uploaded_file and groq_api_key:
                         </div>
                         """, unsafe_allow_html=True)
 
-                # Download option
+                # Download option for picked (rendered) results
                 results_df = pd.DataFrame(picked, columns=["Use Case", "Matched Terms", "Score", "Difficulty"])
                 st.download_button(
                     label="📥 Download Results",
@@ -392,8 +384,15 @@ if uploaded_file and groq_api_key:
                     file_name="filtered_use_cases.csv",
                     mime="text/csv"
                 )
+
+                # Download option for ALL filtered results (before frequency picking)
+                all_filtered_df = pd.DataFrame(results, columns=["Use Case", "Matched Terms", "Score", "Difficulty"])
+                st.download_button(
+                    label="📥 Download ALL Filtered Use Cases",
+                    data=all_filtered_df.to_csv(index=False),
+                    file_name="all_filtered_use_cases.csv",
+                    mime="text/csv"
+                )
 else:
     if not uploaded_file:
         st.info("Please upload an Excel file to begin")
-    if not groq_api_key:
-        st.info("Please enter your Groq API key in the sidebar")
