@@ -2,7 +2,6 @@ import os
 import streamlit as st
 import pandas as pd
 import numpy as np
-import faiss
 from dotenv import load_dotenv
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
